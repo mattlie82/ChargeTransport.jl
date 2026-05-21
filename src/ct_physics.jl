@@ -1667,9 +1667,18 @@ function addTrapCaptureEscape!(f, u, node, data, ::Type{NoTrap})
 end
 """
 $(TYPEDSIGNATURES)
-A simple trap with one state that can either be filled or empty
+Recombination with a trap with one state that can either be filled or empty
+
+The reaction rate is give by:\\
+R ∝ sₙ (1 - f) - eₙ f [if the trap and band have the same charge] \\
+R ∝ sₙ f - eₙ (1 - f) [if the trap and band have opposite charges].
+
+sₙ and eₙ are the capture and escape rate, which are related via detailed balance:\\
+eₙ = sₙ Nc γ exp( zc (Ec - Et) / kT ).
+
+The formalism works when the trap statistics are treated with FermiDiracMinusOne, GaussFermiPaasch or GaussFermiSimpson13.
 """
-function addTrapCaptureEscape!(f, u, node, data, ::Type{SingleStateTrap})
+function addTrapCaptureEscape!(f, u, node, data, ::Type{TrapCaptureEscape})
 
     (; k_B, q) = data.constants
 
@@ -1683,11 +1692,8 @@ function addTrapCaptureEscape!(f, u, node, data, ::Type{SingleStateTrap})
         # Account for non-Boltzmann statistics in detailed balance to compute escape rate.
         # It is assumed that the trap is described using FermiDiracMinusOne. The correction
         # is of F(η)/exp(η) where F is the function used in the carrier state equation.
-        if (data.F[icc] == Boltzmann)
-            nonBoltzmannReductionFactor = 1.0
-        else
-            nonBoltzmannReductionFactor = ncc / (Nc * exp(etaFunction!(u, node, data, icc)))
-        end
+        nonBoltzmannReductionFactor = ncc / (Nc * exp(etaFunction!(u, node, data, icc)))
+
 
         Ec = data.params.bandEdgeEnergy[icc]
         zc = data.params.chargeNumbers[icc]
@@ -1699,15 +1705,12 @@ function addTrapCaptureEscape!(f, u, node, data, ::Type{SingleStateTrap})
                 itc = data.chargeCarrierList[itc] # find correct index within chargeCarrierList
                 s = capture[itc, icc, node.region]
 
-                if (s > 0) # Only compute where there is capture
+                if s > 0 # Only compute where there is capture
                     zt = data.params.chargeNumbers[itc]
 
                     ntc = get_density!(u, node, data, itc)
                     Nt = data.params.densityOfStates[itc]
                     Et = data.params.bandEdgeEnergy[itc]
-
-                    # Escape computed from detailed balance assuming traps described using FD-minus one
-                    e = s * Nc * exp(zc * (Ec - Et) / (k_B * T)) * nonBoltzmannReductionFactor
 
                     # Allow for both acceptor and donor trap in one line
                     # e.g.  If acceptor traps (trap charge = -1) then reaction with
@@ -1715,9 +1718,13 @@ function addTrapCaptureEscape!(f, u, node, data, ::Type{SingleStateTrap})
                     # the valence band is r = Nt*( s*p*f - e*(1-f) ).
                     # For donor traps the (1-f) and f swaps, which is done
                     # using sign(zc*zt).
-                    captureFactor = (sign(zc * zt) + 1) / 2 - sign(zc * zt) * ntc / Nt
-                    escapeFactor = 1 - captureFactor
-                    r = Nt * (s * ncc * captureFactor - e * escapeFactor)
+                    occupationFactor = (sign(zc * zt) + 1) / 2 + sign(-zc * zt) * ntc / Nt
+
+                    # The reaction rate is rewritten in a more convenient form, namely (zc=zt)
+                    # r = Nt s * (1-f(η)) * ( 1 - exp( zc * q/kBT * (φₜ - φₙ) ) )
+                    # or (zc=-zt)
+                    # r = Nt s * f(η) * ( 1 - exp( zc * q/kBT * (φₜ - φₙ) ) )
+                    r = Nt * (s * ncc * occupationFactor) * (1.0 - exp(zc / (k_B * T) * q * (u[itc] - u[icc])))
 
                     # For the reaction expression we use the charge of the band as (e.g.) holes can enter
                     # an electron trap from the valence band, and using the trap charge would not capture this.
@@ -1730,7 +1737,6 @@ function addTrapCaptureEscape!(f, u, node, data, ::Type{SingleStateTrap})
 
     return
 end
-
 """
 $(TYPEDSIGNATURES)
 Include recombination between bands and traps

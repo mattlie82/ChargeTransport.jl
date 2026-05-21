@@ -185,10 +185,72 @@ function enable_trap_carrier!(data; trapCarrier::Int64, regions::Array{Int64, 1}
 
     push!(data.trapCarrierList, enableTraps)
 
-    if (data.F[trapCarrier] !== FermiDiracMinusOne)
-        @warn("Escape rate computed using detailed balance is only implemented for traps whose occupation is modeled with a Fermi-Dirac of order -1")
+    data.bulkRecombination.bulk_recomb_trap = TrapCaptureEscape
+
+    #########################################
+    ## Choose appropriate statistics function
+    #########################################
+    ## Detailed balance is only applied to FermiDiracMinusOne or GaussFermi
+    if ! (typeof(data.F[trapCarrier]) <: TrapFunctionSet)
+        @warn("Escape rate computed using detailed balance is not yet implemented for traps whose occupation is modeled with $(data.F[trapCarrier]). \n Please use one contained in $(TrapFunctionSet)")
     end
 
+    # If a GaussFermi model is chosen, check if the width is non-zero.
+    if typeof(data.F[trapCarrier]) <: GaussFermiFunctionSet
+        ŝ = data.params.trapDistributionWidth[trapCarrier] / (data.params.temperature * data.constants.k_B)
+        if ŝ < 0
+            @info "Negative distribution width. Using abs(ŝ)."
+            ŝ = abs(ŝ)
+        end
+        # Soln to Gauss-Fermi integral very well approximated by FermiDiracMinusOne, and narrow widths can cause numerical problems
+        if abs(ŝ) < 1.0e-6
+            if data.F[trapCarrier] != FermiDiracMinusOne
+                @info "Very narrow Gaussian width. Using Fermi-Dirac minus one statistics."
+                data.F[trapCarrier] = FermiDiracMinusOne
+            end
+        else
+            data.F[trapCarrier] = GaussFermiPaasch(ŝ)
+        end
+    end
+    #########################################
+
+    return
+
+end
+
+"""
+$(SIGNATURES)
+
+This method takes the user information concerning present trap charge carriers,
+builds a statistics function for the species itrap which computes the Gauss-Fermi integral with Simpsons 1/3 rule.
+"""
+function constructGaussFermiSimpson13!(data, itrap::Int64)
+
+    # Physical parameters
+    (; k_B, q) = data.constants
+    kBT = data.params.temperature * k_B
+    Et = data.params.bandEdgeEnergy[itrap]
+    sigma = data.params.trapDistributionWidth[itrap]
+
+    # Numerical integration parameters
+    nPoints = data.params.numberOfEnergyPoints
+
+    # Sanity checks before setting up function
+    if abs(data.params.trapDistributionWidth[itrap]) / kBT < 1.0e-6
+        @info "trapDistributionWidth[$(itrap)] is very small. Using Fermi-Dirac minus one"
+        data.F[itrap] = FermiDiracMinusOne
+        return
+    elseif data.params.trapDistributionWidth[itrap] < 0
+        @info "trapDistributionWidth[$(itrap)] is negative. Using absolute value"
+        data.params.trapDistributionWidth[itrap] = abs(data.params.trapDistributionWidth[itrap])
+    end
+
+    if nPoints < 2
+        @info "numberOfEnergyPoints = $(nPoints). Defaulting to 1000"
+        nPoints = 1000
+    end
+
+    data.F[itrap] = GaussFermiSimpson13(sigma, Et, kBT, nPoints)
     return
 
 end
@@ -284,6 +346,11 @@ mutable struct Params
     """
     invertedIllumination::Int64
 
+    """
+    Number of points to be used in numerical integration of Gauss-Fermi integrals
+    """
+    numberOfEnergyPoints::Int64
+
     ###############################################################
     ####                     real numbers                      ####
     ###############################################################
@@ -311,6 +378,7 @@ mutable struct Params
     Parameter for the shift of generation peak of the Beer-Lambert generation profile.
     """
     generationPeak::Float64
+
 
     ###############################################################
     ####              number of boundary regions               ####
@@ -356,7 +424,10 @@ mutable struct Params
     ``z_\\alpha`` for all carriers ``\\alpha``.
     """
     chargeNumbers::Array{Float64, 1}
-
+    """
+    An array with the corresponding trap distribution width for each trap species.
+    """
+    trapDistributionWidth::Array{Float64, 1}
 
     ###############################################################
     ####    number of boundary regions x number of carriers    ####
@@ -537,6 +608,7 @@ function Params(numberOfRegions, numberOfBoundaryRegions, numberOfCarriers)
     params.numberOfBoundaryRegions = numberOfBoundaryRegions
     params.numberOfCarriers = numberOfCarriers
     params.invertedIllumination = 1                       # we assume that light enters from the left.
+    params.numberOfEnergyPoints = 10_000
 
     ###############################################################
     ####                     real numbers                      ####
@@ -561,6 +633,7 @@ function Params(numberOfRegions, numberOfBoundaryRegions, numberOfCarriers)
     ####                  number of carriers                   ####
     ###############################################################
     params.chargeNumbers = zeros(Float64, numberOfCarriers)
+    params.trapDistributionWidth = zeros(Float64, numberOfCarriers)
 
     ###############################################################
     ####     number of carriers x number of boundary regions   ####
@@ -2023,7 +2096,6 @@ function _equilibrium_solve!(::Val{true}, ctsys::System; inival, control, nonlin
     return
 
 end
-
 
 ###########################################################
 ###########################################################

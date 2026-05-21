@@ -1,7 +1,7 @@
 name = "ChargeTransport"
 uuid = "25c3eafe-d88c-11e9-3031-f396758f002a"
-version = "1.7.1"
-authors = ["Dilara Abdel <dilara.abdel@wias-berlin.de>, Patricio Farrell <patricio.farrell@wias-berlin.de>", "Patrick Jaap <patrick.jaap@wias-berlin.de>", "Marieke Osewold <marieke.osewold@wias-berlin.de>"]
+version = "1.8.0"
+authors = ["Dilara Abdel <dilara.abdel@wias-berlin.de>, Patricio Farrell <patricio.farrell@wias-berlin.de>", "Patrick Jaap <patrick.jaap@wias-berlin.de>", "Marieke Osewold <marieke.osewold@wias-berlin.de>", "Michael O'Donovan <michael.odonovan@wias-berlin.de>"]
 
 [deps]
 Compat = "34da2185-b29b-5c13-b0c7-acf172513d20"
@@ -14,6 +14,7 @@ LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 LessUnitful = "f29f6376-6e90-4d80-80c9-fb8ec61203d5"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
+SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 VoronoiFVM = "82b139dc-5afc-11e9-35da-9b9bdfd336f3"
 
 [compat]
@@ -29,6 +30,7 @@ LessUnitful = "1.2.1"
 Printf = "1.10"
 Roots = "2.0, 3.0"
 SimplexGridFactory = "2.6.0"
+SpecialFunctions = "2.7.2"
 Test = "1.10"
 Triangulate = "3.0"
 VoronoiFVM = "2.13, 3.0"

@@ -2,11 +2,18 @@
 Type of statistics functions.
 
 """
+const GaussFermiFunctionSet = Union{
+    GaussFermiPaasch{Int64}, GaussFermiPaasch{Float64}, GaussFermiSimpson13,
+}
+const TrapFunctionSet = Union{
+    typeof(FermiDiracMinusOne),
+    GaussFermiFunctionSet,
+}
 const StandardFuncSet = Union{
     typeof(Boltzmann), typeof(Blakemore), typeof(FermiDiracMinusOne),
     typeof(FermiDiracOneHalfBednarczyk), typeof(FermiDiracOneHalfTeSCA),
+    TrapFunctionSet,
 }
-
 ##########################################################
 
 """
@@ -226,14 +233,14 @@ const SRHModelType = Union{SRHWithoutTrapsType}
 
 ##########################################################
 
-abstract type SingleStateTrap end
+abstract type TrapCaptureEscape end
 abstract type NoTrap end
 
 ##########################################################
 """
 Data type for trap model
 """
-const TrapModelType = Union{Type{SingleStateTrap}, Type{NoTrap}}
+const TrapModelType = Union{Type{TrapCaptureEscape}, Type{NoTrap}}
 
 ##########################################################
 ##########################################################
